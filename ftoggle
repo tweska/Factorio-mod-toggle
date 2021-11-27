@@ -1,0 +1,80 @@
+#!/usr/bin/env python3
+
+import sys
+import argparse
+from pathlib import Path
+import json
+
+
+RED   = '\033[91m'
+GREEN = '\033[92m'
+RESET = '\033[0m'
+
+# Parser for boolean values.
+def bool_arg_parser(v):
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ('true', 't', 'enable', 'en', 'e', '1'):
+        return True
+    elif v.lower() in ('false', 'f', 'disable', 'dis', 'd', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError("Boolean value expected (like true or false, not '{}').".format(v))
+
+
+# Parse the user arguments.
+parser = argparse.ArgumentParser(
+    description="Toggle all mods in Factorio to save load times!")
+parser.add_argument('--path', '-p',
+                    type=str,
+                    default='~/.factorio/mods/mod-list.json',
+                    help="location of 'mod-list.json' file")
+parser.add_argument('--list', '-l',
+                    action='store_true',
+                    help="list all installed")
+parser.add_argument('--enable', '-e',
+                    type=bool_arg_parser,
+                    required=not '--list' in sys.argv and not '-l' in sys.argv,
+                    help="enable/disable all mods")
+parser.add_argument('--ignore', '-i',
+                    type=str,
+                    help="ignore mods, seperate multiple mods using a comma")
+args = parser.parse_args()
+
+# Get the real path of the file.
+path = Path(args.path).expanduser()
+
+# Read the 'mod-list.json' file as JSON.
+f = open(path, 'r')
+data = json.load(f)
+f.close()
+
+# Walk through all the mods in the file.
+for mod in data['mods']:
+    # Just print the name of the mod if in list mode.
+    if args.list:
+        print("{}{:32s} ({}abled){}".format(
+            GREEN if mod['enabled'] else RED,
+            mod['name'],
+            "en" if mod['enabled'] else "dis",
+            RESET))
+        continue
+    
+    # Skip listed mods and the base mod.
+    if mod['name'] == 'base' or args.ignore and mod['name'] in args.ignore.split(','):
+        print("Skipping '{}'".format(mod['name']))
+        continue
+    
+    # Enable/disable the mod.
+    mod['enabled'] = args.enable
+    print("{}{}abled mod '{}'{}".format(
+        GREEN if mod['enabled'] else RED,
+        "En" if mod['enabled'] else "Dis",
+        mod['name'],
+        RESET))
+    
+# Persist the changes to the file if not in list mode.
+if (not args.list):
+    f = open(path, 'w')
+    json.dump(data, f)
+    f.close()
